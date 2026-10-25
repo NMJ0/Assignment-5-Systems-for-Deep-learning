@@ -1,5 +1,4 @@
-# Machine specification (Q1). Fill in every field; give units.
-# Cite where each value came from (spec sheet URL, lscpu, sysctl, ...) under Sources.
+# Machine specification (Q1). Fill in every field; give units.Fill N/A if not applicable.
 
 CPU model                       :
 Microarchitecture               :
@@ -28,4 +27,4 @@ Memory bandwidth (GB/s)         :
 Ridge point, one core (FLOP/B)  :
 Ridge point, all cores (FLOP/B) :
 
-# Sources
+
