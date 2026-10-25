@@ -1,5 +1,5 @@
 /*
- * attn_omp_fused.c -- Q4: your best fused variant, parallelised with OpenMP.
+ * attn_omp.c -- Q4: your best variant, parallelised with OpenMP.
  *
  * Placeholder: replace the body of attention() with your implementation.
  * Keep the driver (main) below unchanged. See attn_naive.c for the input and
@@ -22,7 +22,7 @@
 void attention(const float *Q, const float *K, const float *V, float *O, int N, int d)
 {
     (void)Q; (void)K; (void)V; (void)O; (void)N; (void)d;
-    printf("attn_omp_fused: not implemented yet\n");
+    printf("attn_omp: not implemented yet\n");
     exit(0); /* no output file is written, so `make check` skips this variant */
 }
 

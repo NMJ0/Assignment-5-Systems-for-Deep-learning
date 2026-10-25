@@ -13,14 +13,14 @@ INPUTS = $(wildcard input/*.bin)
 # make check      : check every variant's output against naive's output
 # make clean      : delete build/ and output/
 
-all: naive loops tiled fused flash omp_unfused omp_fused
+all: naive loops tiled fused best omp
 
-naive loops tiled fused flash:
+naive loops tiled fused best:
 	@mkdir -p build output; rm -f build/$@ output/$@_*
 	-$(CC) $(CFLAGS) -o build/$@ src/attn_$@.c -lm
 	-@for f in $(INPUTS); do [ -x build/$@ ] && ./build/$@ $$f output/$@_`basename $$f`; done; true
 
-omp_unfused omp_fused:
+omp:
 	@mkdir -p build output; rm -f build/$@ output/$@_*
 	-$(CC) $(CFLAGS) $(OMP) -o build/$@ src/attn_$@.c -lm
 	-@for f in $(INPUTS); do [ -x build/$@ ] && ./build/$@ $$f output/$@_`basename $$f`; done; true
@@ -33,14 +33,14 @@ check:
 clean:
 	rm -rf build output
 
-.PHONY: all naive loops tiled fused flash omp_unfused omp_fused check clean
+.PHONY: all naive loops tiled fused best omp check clean
 
 define CHECK
 import glob, os, struct
 from array import array
 def load(p):
     f = open(p, "rb"); n, d = struct.unpack("<ii", f.read(8)); a = array("f"); a.fromfile(f, n * d); return a
-variants = ["loops", "tiled", "fused", "flash", "omp_unfused", "omp_fused"]
+variants = ["loops", "tiled", "fused", "best", "omp"]
 refs = sorted(glob.glob("output/naive_*.bin"))
 if not refs: print("no naive output: run make naive first")
 for ref_path in refs:
