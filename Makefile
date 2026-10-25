@@ -1,85 +1,58 @@
 # CS6886 -- Optimising attention on a CPU
 #
-#   make <variant>   compile src/attn_<variant>.c and run it on every input
-#   make all         do that for every variant (missing or broken ones are skipped)
-#   make check       compare every variant's output with naive's output
-#   make clean       remove build/ and output/
-#
-# Variants: naive loops tiled fused flash omp_unfused omp_fused
-# Compiler: clang by default; override with e.g. `make all CC=gcc`.
-# Threads for the OpenMP variants: e.g. `OMP_NUM_THREADS=8 make omp_fused`.
-
-ifeq ($(origin CC),default)
+# Path to your C compiler. Use the LATEST clang, for example:
+#   Linux:  /usr/bin/clang-23        macOS (Homebrew):  /opt/homebrew/opt/llvm/bin/clang
 CC = clang
-endif
-CFLAGS   = -O3 -march=native -std=c11
-OMPFLAGS = -fopenmp
-LDLIBS   = -lm
 
-VARIANTS = naive loops tiled fused flash omp_unfused omp_fused
-INPUTS   = $(wildcard input/*.bin)
+CFLAGS = -O3 -march=native
+OMP    = -fopenmp
+INPUTS = $(wildcard input/*.bin)
 
-.PHONY: all check clean $(VARIANTS)
+# make <variant>  : compile src/attn_<variant>.c and report its time on every input
+# make all        : the same for every variant
+# make check      : check every variant's output against naive's output
+# make clean      : delete build/ and output/
 
-all: $(VARIANTS)
+all: naive loops tiled fused flash omp_unfused omp_fused
 
-# Compile one variant, then run it on every input. Outputs go to output/
-# (old outputs of the variant are deleted first, so a failed run leaves none).
-$(VARIANTS):
-	@rm -f build/attn_$@ output/$@_*.bin; \
-	if [ ! -f src/attn_$@.c ]; then echo "$@: src/attn_$@.c not found, skipping"; exit 0; fi; \
-	mkdir -p build output; \
-	flags="$(CFLAGS)"; case $@ in omp_*) flags="$$flags $(OMPFLAGS)";; esac; \
-	echo "$(CC) $$flags -o build/attn_$@ src/attn_$@.c $(LDLIBS)"; \
-	if ! $(CC) $$flags -o build/attn_$@ src/attn_$@.c $(LDLIBS); then \
-	    echo "$@: compile failed, skipping"; exit 0; fi; \
-	for f in $(INPUTS); do \
-	    ./build/attn_$@ $$f output/$@_`basename $$f` || echo "$@: failed on $$f"; \
-	done
+naive loops tiled fused flash:
+	@mkdir -p build output; rm -f build/$@ output/$@_*
+	-$(CC) $(CFLAGS) -o build/$@ src/attn_$@.c -lm
+	-@for f in $(INPUTS); do [ -x build/$@ ] && ./build/$@ $$f output/$@_`basename $$f`; done; true
 
-# Every variant's output must match naive's: max|O - O_naive| / max|O_naive| <= 1e-4.
+omp_unfused omp_fused:
+	@mkdir -p build output; rm -f build/$@ output/$@_*
+	-$(CC) $(CFLAGS) $(OMP) -o build/$@ src/attn_$@.c -lm
+	-@for f in $(INPUTS); do [ -x build/$@ ] && ./build/$@ $$f output/$@_`basename $$f`; done; true
+
+# Passes if max|O - O_naive| / max|O_naive| <= 1e-4. Outputs never match exactly:
+# different loop orders round differently.
 check:
-	@python3 -c "$$CHECK_PY"
+	@python3 -c "$$CHECK"
 
 clean:
 	rm -rf build output
 
-define CHECK_PY
-import os, struct
+.PHONY: all naive loops tiled fused flash omp_unfused omp_fused check clean
+
+define CHECK
+import glob, os, struct
 from array import array
-
-def load(path):
-    with open(path, "rb") as f:
-        n, d = struct.unpack("<ii", f.read(8))
-        a = array("f")
-        a.fromfile(f, n * d)
-    return a
-
-variants = "$(VARIANTS)".split()
-compared = 0
-for inp in sorted(os.listdir("input")):
-    ref_path = os.path.join("output", "naive_" + inp)
-    if not os.path.exists(ref_path):
-        print("%-22s no naive output (run make naive first)" % inp)
-        continue
-    ref = load(ref_path)
-    scale = max(abs(x) for x in ref) or 1.0
-    for v in variants[1:]:
-        path = os.path.join("output", v + "_" + inp)
-        if not os.path.exists(path):
-            if os.path.exists(os.path.join("src", "attn_" + v + ".c")):
-                print("%-22s %-12s NO OUTPUT (did not compile or crashed; run make %s)" % (inp, v, v))
-            continue
+def load(p):
+    f = open(p, "rb"); n, d = struct.unpack("<ii", f.read(8)); a = array("f"); a.fromfile(f, n * d); return a
+variants = ["loops", "tiled", "fused", "flash", "omp_unfused", "omp_fused"]
+refs = sorted(glob.glob("output/naive_*.bin"))
+if not refs: print("no naive output: run make naive first")
+for ref_path in refs:
+    ref = load(ref_path); scale = max(abs(x) for x in ref)
+    inp = os.path.basename(ref_path)[len("naive_"):]
+    for v in variants:
+        path = "output/" + v + "_" + inp
+        if not os.path.exists(path): continue
         out = load(path)
-        if len(out) != len(ref):
-            print("%-22s %-12s FAIL (wrong size)" % (inp, v))
-            continue
-        err = max(abs(a - b) for a, b in zip(out, ref)) / scale
-        if err != err:
-            err = float("inf")
-        print("%-22s %-12s %s  (max rel. error %.2e)" % (inp, v, "PASS" if err <= 1e-4 else "FAIL", err))
-        compared += 1
-if not compared:
-    print("nothing to compare yet: run make all (needs naive and at least one other variant)")
+        err = max(abs(a - b) for a, b in zip(out, ref)) / scale if len(out) == len(ref) else float("inf")
+        print("%-20s %-12s %s  (error %.1e)" % (inp, v, "PASS" if err <= 1e-4 else "FAIL", err))
+missing = [v for v in variants if not glob.glob("output/" + v + "_*.bin")]
+if missing: print("no output (not implemented, did not compile, or crashed): " + " ".join(missing))
 endef
-export CHECK_PY
+export CHECK

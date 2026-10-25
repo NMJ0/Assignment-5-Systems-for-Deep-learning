@@ -3,8 +3,8 @@
  *
  *     O = softmax(Q K^T / sqrt(d)) V        Q, K, V, O: N x d, row-major floats
  *
- * To make a new variant, copy this file to src/attn_<variant>.c and change
- * only the attention() function. Keep the driver (main) below unchanged.
+ * Each variant has its own file in src/ with this same driver; write your
+ * code in its attention() function and keep the driver (main) unchanged.
  *
  * Usage:  attn_naive <input.bin> <output.bin>
  *   input.bin : int32 N, int32 d, then Q, K, V (N*d float32 each)
