@@ -1,4 +1,4 @@
-# Machine specification (Q1). Fill in every field; give units.Fill N/A if not applicable.
+# Machine specification (Q1). Fill in every field; give units. Fill in N/A if not applicable.
 
 CPU model                       :
 Microarchitecture               :
